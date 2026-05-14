@@ -269,7 +269,7 @@ function buildTagsJSON() {
       .map(([k]) => k);
     return {
       name: tag.name,
-      color: ensureHex(tag.color),
+      color: tag.color,
       payees,
       rules: tag.rules || [] //rules are the keyword rules for auto-tagging (original case)
     };
@@ -289,7 +289,7 @@ function loadTagsFromJSON(arr, fileName) {
     state.tags.push({
       id,
       name: item.name,
-      color: ensureHex(item.color || '#4f8cff'),
+      color: item.color || '#4f8cff',
       rules: Array.isArray(item.rules) ? item.rules : []
     });
     // Restore payee → tag mappings
@@ -321,22 +321,6 @@ function exportTagsJSON() {
   tagsUnsaved = false;
   updateTagsFileStatus(`Saved: ${tagsFileName}`, 'loaded');
   toast(`Tags saved to "${tagsFileName}"`, 'success');
-}
-
-function ensureHex(color) {
-  // Already a valid 6-digit hex
-  if (/^#[0-9a-fA-F]{6}$/.test(color)) return color.toLowerCase();
-  // 3-digit hex → 6-digit
-  if (/^#[0-9a-fA-F]{3}$/.test(color)) {
-    const [,r,g,b] = color;
-    return ('#' + r+r + g+g + b+b).toLowerCase();
-  }
-  // rgb(r, g, b) → hex
-  const m = color.match(/rgb\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/i);
-  if (m) {
-    return '#' + [m[1],m[2],m[3]].map(n => parseInt(n).toString(16).padStart(2,'0')).join('');
-  }
-  return '#4f8cff'; // fallback
 }
 
 function updateTagsFileStatus(msg, cls) {
@@ -481,9 +465,9 @@ function toggleMonth(m) {
   save(); renderMonthChips(); renderDashboard(); renderTransactions();
 }
 document.getElementById('selAllMonths').addEventListener('click', () => { state.selectedMonths = getMonths(); save(); renderMonthChips(); renderDashboard(); });
-document.getElementById('selNoneMonths').addEventListener('click', () => { const m = getMonths(); if (m.length) { state.selectedMonths = [m[0]]; save(); renderMonthChips(); renderDashboard(); } });
+document.getElementById('selNoneMonths').addEventListener('click', () => { const m = getMonths(); if (m.length) { state.selectedMonths = [m[m.length - 1]]; save(); renderMonthChips(); renderDashboard(); } });
 document.getElementById('selAllMonthsTxn').addEventListener('click', () => { state.selectedMonths = getMonths(); save(); renderMonthChips(); renderTransactions(); });
-document.getElementById('selNoneMonthsTxn').addEventListener('click', () => { const m = getMonths(); if (m.length) { state.selectedMonths = [m[0]]; save(); renderMonthChips(); renderTransactions(); } });
+document.getElementById('selNoneMonthsTxn').addEventListener('click', () => { const m = getMonths(); if (m.length) { state.selectedMonths = [m[m.length - 1]]; save(); renderMonthChips(); renderTransactions(); } });
 
 function filteredTxns() {
   return state.transactions.filter(t => {
@@ -1031,7 +1015,7 @@ function renderTags() {
     const ruleHtml = tag.rules && tag.rules.length
       ? `<div style="font-size:0.72rem;color:var(--text3);margin-top:6px">Rules: ${tag.rules.slice(0,3).map(r=>`<span style="font-family:var(--mono)">${esc(r)}</span>`).join(', ')}${tag.rules.length>3?`…+${tag.rules.length-3}`:''}</div>`
       : '';
-    const hexColor = ensureHex(tag.color);
+    const hexColor = tag.color;
     return `<div class="tag-card">
       <div class="tag-card-actions">
         <button class="icon-btn" onclick="openEditTag('${tag.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
@@ -1061,7 +1045,7 @@ function renderTags() {
 window.createTag = function() {
   const name = document.getElementById('newTagName').value.trim();
   if (!name) { toast('Enter a tag name', 'error'); return; }
-  const color = ensureHex(document.getElementById('newTagColor').value);
+  const color = document.getElementById('newTagColor').value;
   state.tags.push({ id: genId(), name, color, rules: [] });
   markTagsUnsaved();
   renderTags(); updateTagFilter();
@@ -1084,7 +1068,7 @@ window.openEditTag = function(id) {
   if (!tag) return;
   document.getElementById('editTagTitle').textContent = `Edit: ${tag.name}`;
   document.getElementById('editTagName').value = tag.name;
-  document.getElementById('editTagColor').value = ensureHex(tag.color);
+  document.getElementById('editTagColor').value = tag.color;
   renderRuleList(tag.rules || []);
   document.getElementById('editTagModal').classList.add('open');
 };
@@ -1123,7 +1107,7 @@ document.getElementById('editTagSave').addEventListener('click', () => {
   const name = document.getElementById('editTagName').value.trim();
   if (!name) { toast('Tag name required', 'error'); return; }
   tag.name = name;
-  tag.color = ensureHex(document.getElementById('editTagColor').value);
+  tag.color = document.getElementById('editTagColor').value;
   reapplyAllAutoTags();
   save(); markTagsUnsaved();
   renderTags(); renderTransactions(); renderDashboard(); updateTagFilter();
