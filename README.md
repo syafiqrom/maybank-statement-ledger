@@ -1,4 +1,4 @@
-# MayLedger — Bank Statement Analyser for Maybank
+# M-Ledger — Bank Statement Analyser for Maybank
 
 A fully local, privacy-first bank statement analyser. Your PDFs never leave your machine.
 
