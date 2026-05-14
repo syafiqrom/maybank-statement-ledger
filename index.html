@@ -6,6 +6,7 @@
 <title>Ledger — Bank Statement Analyser</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 </head>
 <body>
@@ -252,31 +253,13 @@ function load() {
       state.transactions = parsed.transactions || [];
       state.selectedMonths = parsed.selectedMonths || [];
       state.importedFiles = parsed.importedFiles || [];
+      // Clean up any interrupted uploads that never finished
+      state.importedFiles = state.importedFiles.filter(f => f.status !== 'info');
     }
-    // tags and payeeTags start empty — must be loaded from JSON file
     state.tags = [];
     state.payeeTags = {};
   } catch(e) {}
 }
-
-// ===== TAGS JSON — SERIALISATION =====
-/**
- * Tags JSON format:
- * [
- *   {
- *     "name": "Food & Dining",
- *     "color": "#4f8cff",
- *     "payees": ["restoran hakim", "kfc", "mcdonald"],
- *     "rules": ["Restoran Hakim", "KFC", "McDonald"]
- *   },
- *   ...
- * ]
- *
- * - `color` is always a 6-digit hex string (#rrggbb)
- * - `payees` is the list of normalised payee keys (lowercase, trimmed) currently
- *   mapped to this tag via the payeeTags dictionary
- * - `rules` are the keyword rules for auto-tagging (original case)
- */
 
 function buildTagsJSON() {
   return state.tags.map(tag => {
@@ -288,7 +271,7 @@ function buildTagsJSON() {
       name: tag.name,
       color: ensureHex(tag.color),
       payees,
-      rules: tag.rules || []
+      rules: tag.rules || [] //rules are the keyword rules for auto-tagging (original case)
     };
   });
 }
@@ -892,14 +875,23 @@ document.getElementById('clearAllData').addEventListener('click', () => {
 async function handleFiles(files) {
   const arr = Array.from(files).filter(f => f.name.toLowerCase().endsWith('.pdf'));
   if (!arr.length) { toast('Please upload PDF files', 'error'); return; }
-  for (const file of arr) { await processPDF(file); }
+  for (const file of arr) {
+    if (state.importedFiles.some(f => f.name === file.name)) {
+      toast(`"${file.name}" already imported, skipping.`, 'warning');
+      continue;
+    }
+    await processPDF(file);
+  }
   renderImportPage();
 }
 
 // ===== PDF PROCESSING — sends to local Flask server =====
 async function processPDF(file) {
-  addImportedFile(file.name, 'info', 'Converting PDF…', null);
-  renderImportPage();
+  // Show converting status in UI only — do NOT save this interim state
+  state.importedFiles = state.importedFiles.filter(f => f.name !== file.name);
+  state.importedFiles.unshift({ name: file.name, status: 'info', message: 'Converting PDF…', verify: null });
+  renderImportPage(); // show spinner/status in UI
+
   try {
     const form = new FormData();
     form.append('pdf', file);
@@ -913,14 +905,16 @@ async function processPDF(file) {
 
     if (!res.ok) {
       addImportedFile(file.name, 'error', data.error || 'Conversion failed', null);
+      save(); // only persist on final status
       toast('Failed to convert ' + file.name, 'error');
       return;
     }
 
-    parseStatementJSON(data, file.name);
+    parseStatementJSON(data, file.name); // this calls addImportedFile + save internally
 
   } catch (e) {
     addImportedFile(file.name, 'error', 'Cannot reach local server — is app.py running?', null);
+    save(); // only persist on final status
     toast('Start app.py first: python app.py', 'error');
   }
 }
