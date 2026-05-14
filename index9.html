@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ledger — Bank Statement Analyser</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="styles.css">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+</head>
+
+<body>
+<div id="app">
+  <nav id="sidebar">
+    <div class="logo">
+      <div class="logo-icon">L</div>
+      Led<span>ger</span>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">Overview</div>
+      <button class="nav-item active" data-page="dashboard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        Dashboard
+      </button>
+      <button class="nav-item" data-page="transactions">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+        Transactions
+      </button>
+    </div>
+    <div class="nav-section" style="margin-top:8px">
+      <div class="nav-label">Manage</div>
+      <button class="nav-item" data-page="import">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        Import
+      </button>
+      <button class="nav-item" data-page="tags">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><circle cx="7" cy="7" r="1.5" fill="currentColor"/></svg>
+        Tag Manager
+      </button>
+    </div>
+    <div class="sidebar-footer">
+      <button class="theme-toggle" id="themeToggle">
+        <svg id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+        Light Mode
+      </button>
+    </div>
+  </nav>
+
+  <main id="main">
+    <!-- DASHBOARD -->
+    <div id="page-dashboard" class="page active">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Dashboard</div>
+          <div class="page-sub" id="dash-period">No data imported yet</div>
+        </div>
+      </div>
+      <div id="filter-bar-dash" class="filter-bar" style="display:none">
+        <span class="filter-label">Months</span>
+        <div class="month-chips" id="month-chips-dash"></div>
+        <div class="filter-actions">
+          <button class="btn btn-ghost btn-sm" id="selAllMonths">All</button>
+          <button class="btn btn-ghost btn-sm" id="selNoneMonths">None</button>
+        </div>
+      </div>
+      <div class="cards-row">
+        <div class="card"><div class="card-accent-bar" style="background:linear-gradient(90deg,var(--green),#1aad70)"></div><div class="card-label">Total Income</div><div class="card-value green" id="card-income">—</div><div class="card-sub" id="card-income-sub">0 transactions</div></div>
+        <div class="card"><div class="card-accent-bar" style="background:linear-gradient(90deg,var(--red),#cc3a46)"></div><div class="card-label">Total Expenses</div><div class="card-value red" id="card-expenses">—</div><div class="card-sub" id="card-expenses-sub">0 transactions</div></div>
+        <div class="card"><div class="card-accent-bar" style="background:linear-gradient(90deg,var(--accent),var(--accent2))"></div><div class="card-label">Net Balance</div><div class="card-value blue" id="card-net">—</div><div class="card-sub" id="card-net-sub">income - expenses</div></div>
+        <div class="card"><div class="card-accent-bar" style="background:linear-gradient(90deg,var(--yellow),#e6a800)"></div><div class="card-label">Top Category</div><div class="card-value" id="card-top" style="font-size:1.1rem">—</div><div class="card-sub" id="card-top-sub">—</div></div>
+      </div>
+      <div class="charts-row">
+        <div class="chart-card"><div class="chart-title">Spending by Category</div><div class="chart-wrap"><canvas id="pieChart"></canvas></div></div>
+        <div class="chart-card"><div class="chart-title">Monthly Spending Trend</div><div class="chart-wrap"><canvas id="barChart"></canvas></div></div>
+      </div>
+    </div>
+
+    <!-- TRANSACTIONS -->
+    <div id="page-transactions" class="page">
+      <div class="page-header">
+        <div><div class="page-title">Transactions</div><div class="page-sub" id="txn-count-label">—</div></div>
+      </div>
+      <div id="filter-bar-txn" class="filter-bar" style="display:none">
+        <span class="filter-label">Months</span>
+        <div class="month-chips" id="month-chips-txn"></div>
+        <div class="filter-actions">
+          <button class="btn btn-ghost btn-sm" id="selAllMonthsTxn">All</button>
+          <button class="btn btn-ghost btn-sm" id="selNoneMonthsTxn">None</button>
+        </div>
+      </div>
+      <div class="table-controls">
+        <div class="search-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" class="search-input" id="txnSearch" placeholder="Search transactions…">
+        </div>
+        <select class="filter-select" id="typeFilter">
+          <option value="all">All types</option>
+          <option value="debit">Expenses</option>
+          <option value="credit">Income</option>
+        </select>
+        <select class="filter-select" id="tagFilter">
+          <option value="all">All tags</option>
+          <option value="untagged">Untagged</option>
+        </select>
+        <button class="btn btn-ghost btn-sm" id="exportCsvBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Export CSV
+        </button>
+      </div>
+      <div class="table-wrap">
+        <table id="txnTable">
+          <thead>
+            <tr>
+              <th data-sort="date">Date <span>↕</span></th>
+              <th data-sort="desc">Payee <span>↕</span></th>
+              <th>Type</th>
+              <th data-sort="amount">Amount <span>↕</span></th>
+              <th data-sort="balance">Balance <span>↕</span></th>
+              <th>Tag</th>
+            </tr>
+          </thead>
+          <tbody id="txnBody"></tbody>
+        </table>
+        <div class="pagination" id="txnPagination"></div>
+      </div>
+    </div>
+
+    <!-- IMPORT -->
+    <div id="page-import" class="page">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Import Statements</div>
+          <div class="page-sub">Upload JSON bank statement files. Multiple files supported.</div>
+        </div>
+        <button class="btn btn-danger btn-sm" id="clearAllData">Clear All Data</button>
+      </div>
+
+      <div class="drop-zone" id="dropZone">
+        <input type="file" id="fileInput" multiple accept=".json">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+          <path d="M10 13l2 2 4-4"/>
+        </svg>
+        <h3>Drop JSON statement files here</h3>
+        <p>Multiple files supported · Balance verification included</p>
+        <button class="btn btn-primary" style="margin-top:16px;pointer-events:none">Browse Files</button>
+      </div>
+
+      <div class="json-preview" id="jsonPreview"></div>
+
+      <div class="imported-files" id="importedFilesList"></div>
+    </div>
+
+    <!-- TAGS -->
+    <div id="page-tags" class="page">
+      <div class="page-header">
+        <div><div class="page-title">Tag Manager</div><div class="page-sub">Tags auto-apply by payee name. Add payee keywords to auto-tag all their transactions.</div></div>
+      </div>
+      <div class="tags-grid" id="tagsGrid"></div>
+    </div>
+  </main>
+</div>
+
+<!-- EDIT TAG MODAL -->
+<div class="modal-overlay" id="editTagModal">
+  <div class="modal">
+    <div class="modal-title" id="editTagTitle">Edit Tag</div>
+    <div class="modal-sub">Payee keywords auto-tag all matching transactions. Case-insensitive partial match.</div>
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div class="form-row">
+        <div class="form-group"><label>Tag Name</label><input type="text" class="form-input" id="editTagName" placeholder="e.g. Food & Dining"></div>
+        <div class="form-group" style="max-width:80px"><label>Color</label><input type="color" class="form-input" id="editTagColor"></div>
+      </div>
+      <div>
+        <div class="form-group">
+          <label>Payee Keywords (match against payee name)</label>
+          <div style="display:flex;gap:8px;margin-top:6px">
+            <input type="text" class="form-input" id="newRuleInput" placeholder="e.g. Restoran Hakim, KK Super, 7-Eleven" style="flex:1">
+            <button class="btn btn-ghost btn-sm" id="addRuleBtn">Add</button>
+          </div>
+        </div>
+        <div class="rule-list" id="ruleList"></div>
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button class="btn btn-ghost" id="editTagCancel">Cancel</button>
+        <button class="btn btn-primary" id="editTagSave">Save Tag</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<script>
+// ===== STATE =====
+let state = {
+  transactions: [],
+  tags: [],
+  payeeTags: {},
+  selectedMonths: [],
+  importedFiles: []
+};
+
+let charts = { pie: null, bar: null };
+let currentPage = 1;
+const PAGE_SIZE = 20;
+let sortCol = 'date', sortDir = -1;
+let editingTagId = null;
+let activeDropdown = null;
+
+// ===== STORAGE =====
+function save() {
+  try { localStorage.setItem('ledger_state', JSON.stringify(state)); }
+  catch(e) { toast('Storage full', 'error'); }
+}
+function load() {
+  try {
+    const s = localStorage.getItem('ledger_state');
+    if (s) state = { ...{ transactions:[], tags:[], payeeTags:{}, selectedMonths:[], importedFiles:[] }, ...JSON.parse(s) };
+    if (!state.payeeTags) state.payeeTags = {};
+  } catch(e) {}
+}
+
+// ===== NAVIGATION =====
+function navigate(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + page).classList.add('active');
+  document.querySelector(`[data-page="${page}"]`).classList.add('active');
+  if (page === 'dashboard') renderDashboard();
+  if (page === 'transactions') renderTransactions();
+  if (page === 'tags') renderTags();
+  if (page === 'import') renderImportPage();
+}
+document.querySelectorAll('.nav-item').forEach(btn => btn.addEventListener('click', () => navigate(btn.dataset.page)));
+
+// ===== THEME =====
+let theme = localStorage.getItem('ledger_theme') || 'dark';
+document.documentElement.setAttribute('data-theme', theme);
+function updateThemeBtn() {
+  const icon = document.getElementById('themeIcon');
+  const btn = document.getElementById('themeToggle');
+  if (theme === 'dark') {
+    icon.innerHTML = '<circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>';
+    btn.lastChild.textContent = ' Light Mode';
+  } else {
+    icon.innerHTML = '<path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>';
+    btn.lastChild.textContent = ' Dark Mode';
+  }
+}
+document.getElementById('themeToggle').addEventListener('click', () => {
+  theme = theme === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem('ledger_theme', theme);
+  updateThemeBtn();
+  if (charts.pie) { charts.pie.destroy(); charts.pie = null; }
+  if (charts.bar) { charts.bar.destroy(); charts.bar = null; }
+  renderDashboard();
+});
+updateThemeBtn();
+
+// ===== TOAST =====
+function toast(msg, type = 'info') {
+  const c = document.getElementById('toast-container');
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  t.textContent = msg;
+  c.appendChild(t);
+  setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity 0.3s'; setTimeout(() => t.remove(), 300); }, 3500);
+}
+
+// ===== MONTHS =====
+function getMonths() {
+  const months = new Set();
+  state.transactions.forEach(t => {
+    const d = new Date(t.date);
+    if (!isNaN(d)) months.add(d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0'));
+  });
+  return Array.from(months).sort();
+}
+function initMonths() {
+  const months = getMonths();
+  if (!state.selectedMonths.length) state.selectedMonths = [...months];
+  state.selectedMonths = state.selectedMonths.filter(m => months.includes(m));
+  if (!state.selectedMonths.length && months.length) state.selectedMonths = [...months];
+  renderMonthChips();
+}
+function renderMonthChips() {
+  const months = getMonths();
+  ['dash','txn'].forEach(suffix => {
+    const bar = document.getElementById('filter-bar-' + suffix);
+    const cont = document.getElementById('month-chips-' + suffix);
+    if (!bar || !cont) return;
+    bar.style.display = months.length ? '' : 'none';
+    cont.innerHTML = months.map(m => {
+      const [y, mo] = m.split('-');
+      const label = new Date(y, mo-1, 1).toLocaleString('default', { month: 'short', year: '2-digit' });
+      return `<div class="month-chip${state.selectedMonths.includes(m)?' active':''}" data-month="${m}">${label}</div>`;
+    }).join('');
+    cont.querySelectorAll('.month-chip').forEach(chip => chip.addEventListener('click', () => toggleMonth(chip.dataset.month)));
+  });
+}
+function toggleMonth(m) {
+  if (state.selectedMonths.includes(m)) {
+    if (state.selectedMonths.length === 1) return;
+    state.selectedMonths = state.selectedMonths.filter(x => x !== m);
+  } else {
+    state.selectedMonths.push(m);
+  }
+  save(); renderMonthChips(); renderDashboard(); renderTransactions();
+}
+document.getElementById('selAllMonths').addEventListener('click', () => { state.selectedMonths = getMonths(); save(); renderMonthChips(); renderDashboard(); });
+document.getElementById('selNoneMonths').addEventListener('click', () => { const m = getMonths(); if (m.length) { state.selectedMonths = [m[0]]; save(); renderMonthChips(); renderDashboard(); } });
+document.getElementById('selAllMonthsTxn').addEventListener('click', () => { state.selectedMonths = getMonths(); save(); renderMonthChips(); renderTransactions(); });
+document.getElementById('selNoneMonthsTxn').addEventListener('click', () => { const m = getMonths(); if (m.length) { state.selectedMonths = [m[0]]; save(); renderMonthChips(); renderTransactions(); } });
+
+function filteredTxns() {
+  return state.transactions.filter(t => {
+    const d = new Date(t.date);
+    if (isNaN(d)) return false;
+    const m = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+    return state.selectedMonths.includes(m);
+  });
+}
+
+// ===== DASHBOARD =====
+function renderDashboard() {
+  initMonths();
+  const txns = filteredTxns();
+  const months = getMonths();
+  if (!txns.length) {
+    document.getElementById('dash-period').textContent = months.length ? 'No data for selected months' : 'No data imported yet';
+    ['card-income','card-expenses','card-net','card-top'].forEach(id => document.getElementById(id).textContent = '—');
+    document.getElementById('card-income-sub').textContent = '0 transactions';
+    document.getElementById('card-expenses-sub').textContent = '0 transactions';
+    document.getElementById('card-net-sub').textContent = 'income - expenses';
+    document.getElementById('card-top-sub').textContent = '—';
+    renderPieChart([]); renderBarChart([]); return;
+  }
+  const credits = txns.filter(t => t.amount > 0);
+  const debits = txns.filter(t => t.amount < 0);
+  const totalIncome = credits.reduce((s,t) => s + t.amount, 0);
+  const totalExpenses = Math.abs(debits.reduce((s,t) => s + t.amount, 0));
+  const net = totalIncome - totalExpenses;
+  document.getElementById('dash-period').textContent = state.selectedMonths.length === months.length ? `All ${months.length} month(s)` : `${state.selectedMonths.length} month(s) selected`;
+  const fmt = v => 'RM ' + Math.abs(v).toLocaleString('en-MY', { minimumFractionDigits: 2 });
+  document.getElementById('card-income').textContent = fmt(totalIncome);
+  document.getElementById('card-expenses').textContent = fmt(totalExpenses);
+  document.getElementById('card-net').textContent = (net >= 0 ? '+' : '-') + 'RM ' + Math.abs(net).toLocaleString('en-MY', { minimumFractionDigits: 2 });
+  document.getElementById('card-net').className = 'card-value ' + (net >= 0 ? 'green' : 'red');
+  document.getElementById('card-income-sub').textContent = credits.length + ' transactions';
+  document.getElementById('card-expenses-sub').textContent = debits.length + ' transactions';
+  document.getElementById('card-net-sub').textContent = 'income - expenses';
+
+  const tagSpend = {};
+  debits.forEach(t => { const k = t.tag || '__untagged__'; tagSpend[k] = (tagSpend[k]||0) + Math.abs(t.amount); });
+  const sorted = Object.entries(tagSpend).sort((a,b) => b[1]-a[1]);
+  if (sorted.length) {
+    const [topKey, topVal] = sorted[0];
+    const topTag = state.tags.find(t => t.id === topKey);
+    document.getElementById('card-top').textContent = topKey === '__untagged__' ? 'Untagged' : (topTag ? topTag.name : topKey);
+    document.getElementById('card-top-sub').textContent = 'RM ' + topVal.toLocaleString('en-MY', { minimumFractionDigits: 2 });
+  }
+  renderPieChart(sorted); renderBarChart(txns);
+}
+
+function getChartColors() {
+  return theme === 'dark' ? { text: '#9aa0b8', grid: '#2a2f3d', bg: '#111318' } : { text: '#4a5070', grid: '#d0d5e8', bg: '#ffffff' };
+}
+function renderPieChart(tagData) {
+  const ctx = document.getElementById('pieChart').getContext('2d');
+  if (charts.pie) { charts.pie.destroy(); charts.pie = null; }
+  if (!tagData.length) return;
+  const COLORS = ['#4f8cff','#7b5cff','#3dd68c','#ffc043','#ff5c6a','#38c9d4','#f97316','#a78bfa','#fb7185','#34d399'];
+  const labels=[], data=[], colors=[];
+  tagData.forEach(([k,v],i) => {
+    const tag = state.tags.find(t=>t.id===k);
+    labels.push(k==='__untagged__' ? 'Untagged' : (tag ? tag.name : k));
+    data.push(v);
+    colors.push(k==='__untagged__' ? '#5c6380' : (tag ? tag.color : COLORS[i%COLORS.length]));
+  });
+  const c = getChartColors();
+  charts.pie = new Chart(ctx, {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data, backgroundColor: colors, borderWidth: 2, borderColor: c.bg, hoverOffset: 6 }] },
+    options: { responsive: true, maintainAspectRatio: false, cutout: '62%',
+      plugins: { legend: { position: 'right', labels: { color: c.text, font: { family: 'Syne', size: 11 }, padding: 12, boxWidth: 12 } },
+        tooltip: { callbacks: { label: ctx => ` RM ${ctx.parsed.toLocaleString('en-MY', { minimumFractionDigits: 2 })}` } } } }
+  });
+}
+function renderBarChart(txns) {
+  const ctx = document.getElementById('barChart').getContext('2d');
+  if (charts.bar) { charts.bar.destroy(); charts.bar = null; }
+  if (!txns.length) return;
+  const monthly = {};
+  txns.forEach(t => {
+    const d = new Date(t.date); if (isNaN(d)) return;
+    const k = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+    if (!monthly[k]) monthly[k] = { expense: 0, income: 0 };
+    if (t.amount < 0) monthly[k].expense += Math.abs(t.amount); else monthly[k].income += t.amount;
+  });
+  const keys = Object.keys(monthly).sort();
+  const labels = keys.map(k => { const [y,m] = k.split('-'); return new Date(y,m-1,1).toLocaleString('default',{month:'short',year:'2-digit'}); });
+  const c = getChartColors();
+  charts.bar = new Chart(ctx, {
+    type: 'bar',
+    data: { labels, datasets: [
+      { label:'Expenses', data: keys.map(k=>monthly[k].expense), backgroundColor:'rgba(255,92,106,0.75)', borderRadius:5, borderSkipped:false },
+      { label:'Income', data: keys.map(k=>monthly[k].income), backgroundColor:'rgba(61,214,140,0.65)', borderRadius:5, borderSkipped:false }
+    ]},
+    options: { responsive:true, maintainAspectRatio:false,
+      plugins: { legend: { labels: { color:c.text, font:{family:'Syne',size:11}, boxWidth:12 } } },
+      scales: {
+        x: { grid:{color:c.grid}, ticks:{color:c.text, font:{family:'JetBrains Mono',size:10}} },
+        y: { grid:{color:c.grid}, ticks:{color:c.text, font:{family:'JetBrains Mono',size:10}, callback:v=>'RM'+v.toLocaleString()} }
+      }
+    }
+  });
+}
+
+// ===== TRANSACTIONS =====
+function renderTransactions() { initMonths(); updateTagFilter(); applyTxnFilter(); }
+function updateTagFilter() {
+  const sel = document.getElementById('tagFilter');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="all">All tags</option><option value="untagged">Untagged</option>';
+  state.tags.forEach(t => { const o = document.createElement('option'); o.value=t.id; o.textContent=t.name; sel.appendChild(o); });
+  sel.value = cur;
+}
+
+let txnFilter = { search:'', type:'all', tag:'all' };
+document.getElementById('txnSearch').addEventListener('input', e => { txnFilter.search=e.target.value; currentPage=1; applyTxnFilter(); });
+document.getElementById('typeFilter').addEventListener('change', e => { txnFilter.type=e.target.value; currentPage=1; applyTxnFilter(); });
+document.getElementById('tagFilter').addEventListener('change', e => { txnFilter.tag=e.target.value; currentPage=1; applyTxnFilter(); });
+
+function applyTxnFilter() {
+  let txns = filteredTxns();
+  const q = txnFilter.search.toLowerCase();
+  if (q) txns = txns.filter(t => t.payee.toLowerCase().includes(q) || t.txType.toLowerCase().includes(q));
+  if (txnFilter.type === 'debit') txns = txns.filter(t => t.amount < 0);
+  if (txnFilter.type === 'credit') txns = txns.filter(t => t.amount > 0);
+  if (txnFilter.tag === 'untagged') txns = txns.filter(t => !t.tag);
+  else if (txnFilter.tag !== 'all') txns = txns.filter(t => t.tag === txnFilter.tag);
+  txns.sort((a,b) => {
+    let va, vb;
+    if (sortCol==='date') { va=new Date(a.date); vb=new Date(b.date); }
+    else if (sortCol==='amount') { va=a.amount; vb=b.amount; }
+    else if (sortCol==='balance') { va=a.balance||0; vb=b.balance||0; }
+    else { va=a.payee.toLowerCase(); vb=b.payee.toLowerCase(); }
+    return va<vb ? -sortDir : va>vb ? sortDir : 0;
+  });
+  document.getElementById('txn-count-label').textContent = `${txns.length} transaction${txns.length!==1?'s':''}`;
+  renderTxnTable(txns);
+}
+
+document.querySelectorAll('#txnTable th[data-sort]').forEach(th => {
+  th.addEventListener('click', () => {
+    if (sortCol===th.dataset.sort) sortDir*=-1; else { sortCol=th.dataset.sort; sortDir=-1; }
+    document.querySelectorAll('#txnTable th').forEach(h => h.classList.remove('sorted'));
+    th.classList.add('sorted');
+    applyTxnFilter();
+  });
+});
+
+function renderTxnTable(txns) {
+  const body = document.getElementById('txnBody');
+  const total = txns.length;
+  const pages = Math.ceil(total/PAGE_SIZE) || 1;
+  if (currentPage > pages) currentPage = pages;
+  const slice = txns.slice((currentPage-1)*PAGE_SIZE, currentPage*PAGE_SIZE);
+
+  if (!slice.length) {
+    body.innerHTML = `<tr><td colspan="6"><div class="empty-state">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+      <h3>No transactions</h3><p>Import JSON statements or adjust filters</p>
+    </div></td></tr>`;
+    document.getElementById('txnPagination').innerHTML = '';
+    return;
+  }
+
+  body.innerHTML = slice.map(t => {
+    const tag = state.tags.find(g => g.id === t.tag);
+    const tagHtml = tag
+      ? `<div class="tag-badge" data-txn-id="${t.id}" style="background:${tag.color}22;border-color:${tag.color}55;color:${tag.color};cursor:pointer"><span class="tag-dot" style="background:${tag.color}"></span>${esc(tag.name)}</div>`
+      : `<div class="tag-badge tag-untagged" data-txn-id="${t.id}" style="cursor:pointer">+ Tag</div>`;
+    const balHtml = t.balance != null ? `<td class="td-balance">RM ${t.balance.toLocaleString('en-MY',{minimumFractionDigits:2})}</td>` : '<td class="td-balance">—</td>';
+    return `<tr>
+      <td class="td-date">${formatDate(t.date)}</td>
+      <td class="td-desc" title="${esc(t.payee)}">${esc(t.payee)}</td>
+      <td class="td-type">${esc(t.txType||'')}</td>
+      <td class="td-amount ${t.amount<0?'debit':'credit'}">${t.amount<0?'-':'+'}RM ${Math.abs(t.amount).toLocaleString('en-MY',{minimumFractionDigits:2})}</td>
+      ${balHtml}
+      <td>${tagHtml}</td>
+    </tr>`;
+  }).join('');
+
+  body.querySelectorAll('[data-txn-id]').forEach(el => {
+    el.addEventListener('click', e => { e.stopPropagation(); openTagDropdown(el); });
+  });
+
+  renderPagination(total, pages);
+}
+
+// ===== TAG DROPDOWN =====
+function openTagDropdown(el) {
+  closeAllDropdowns();
+  const txnId = el.dataset.txnId;
+  const txn = state.transactions.find(t => t.id === txnId);
+  if (!txn) return;
+
+  const dd = document.createElement('div');
+  dd.className = 'tag-dropdown open';
+  dd.innerHTML = `
+    <div class="tag-dropdown-search"><input type="text" placeholder="Search tags…" id="ddSearch" autocomplete="off"></div>
+    <div class="tag-dropdown-list" id="ddList"></div>`;
+
+  document.body.appendChild(dd);
+  activeDropdown = { el: dd, txnId };
+
+  const renderList = (filter='') => {
+    const list = dd.querySelector('#ddList');
+    const q = filter.toLowerCase();
+    const items = [{ id: '', name: 'Untagged', color: 'var(--border2)' }, ...state.tags];
+    const filtered = items.filter(t => t.name.toLowerCase().includes(q));
+    list.innerHTML = filtered.map(t =>
+      `<div class="tag-dropdown-item${txn.tag===t.id||(!txn.tag&&!t.id)?' selected':''}" data-val="${t.id}">
+        <span style="width:10px;height:10px;border-radius:50%;background:${t.color||'var(--border2)'};display:inline-block;flex-shrink:0"></span>
+        ${esc(t.name)}
+      </div>`
+    ).join('') || '<div style="padding:10px 12px;font-size:0.8rem;color:var(--text3)">No tags found</div>';
+    list.querySelectorAll('.tag-dropdown-item').forEach(item => {
+      item.addEventListener('mousedown', e => {
+        e.preventDefault();
+        const val = item.dataset.val || null;
+        assignTagToPayee(txn, val);
+        closeAllDropdowns();
+      });
+    });
+  };
+
+  renderList();
+  dd.querySelector('#ddSearch').addEventListener('input', e => renderList(e.target.value));
+
+  const rect = el.getBoundingClientRect();
+  dd.style.position = 'fixed';
+  dd.style.top = (rect.bottom + 4) + 'px';
+  dd.style.left = rect.left + 'px';
+  dd.style.minWidth = Math.max(200, rect.width) + 'px';
+
+  requestAnimationFrame(() => {
+    const ddRect = dd.getBoundingClientRect();
+    if (ddRect.right > window.innerWidth) dd.style.left = (window.innerWidth - ddRect.width - 8) + 'px';
+    if (ddRect.bottom > window.innerHeight) dd.style.top = (rect.top - ddRect.height - 4) + 'px';
+    dd.querySelector('#ddSearch').focus();
+  });
+
+  setTimeout(() => { document.addEventListener('mousedown', outsideClick); }, 0);
+}
+
+function outsideClick(e) {
+  if (activeDropdown && !activeDropdown.el.contains(e.target)) closeAllDropdowns();
+}
+function closeAllDropdowns() {
+  if (activeDropdown) { activeDropdown.el.remove(); activeDropdown = null; }
+  document.removeEventListener('mousedown', outsideClick);
+}
+
+// ===== TAG ASSIGNMENT =====
+function assignTagToPayee(txn, tagId) {
+  const payeeKey = normalizePayeeKey(txn.payee);
+  if (tagId) state.payeeTags[payeeKey] = tagId;
+  else delete state.payeeTags[payeeKey];
+  let count = 0;
+  state.transactions.forEach(t => {
+    if (normalizePayeeKey(t.payee) === payeeKey) { t.tag = tagId || null; count++; }
+  });
+  save(); applyTxnFilter(); renderDashboard();
+  const tag = state.tags.find(t => t.id === tagId);
+  toast(`Tagged ${count} transaction${count!==1?'s':''} as "${tag ? tag.name : 'Untagged'}"`, 'success');
+}
+
+function normalizePayeeKey(name) {
+  return (name || '').toLowerCase().trim().replace(/\s+/g, ' ');
+}
+
+function autoTagTxn(txn) {
+  const key = normalizePayeeKey(txn.payee);
+  if (state.payeeTags[key]) { txn.tag = state.payeeTags[key]; return; }
+  for (const tag of state.tags) {
+    if (!tag.rules || !tag.rules.length) continue;
+    for (const rule of tag.rules) {
+      if (txn.payee.toLowerCase().includes(rule.toLowerCase())) {
+        txn.tag = tag.id;
+        state.payeeTags[key] = tag.id;
+        return;
+      }
+    }
+  }
+  txn.tag = null;
+}
+
+function reapplyAllAutoTags() {
+  state.transactions.forEach(t => autoTagTxn(t));
+}
+
+// ===== PAGINATION =====
+function renderPagination(total, pages) {
+  const pag = document.getElementById('txnPagination');
+  if (pages <= 1) { pag.innerHTML = `<div class="page-info">${total} transactions</div>`; return; }
+  const from=(currentPage-1)*PAGE_SIZE+1, to=Math.min(currentPage*PAGE_SIZE,total);
+  let btns='';
+  const start=Math.max(1,currentPage-2), end=Math.min(pages,currentPage+2);
+  if (start>1) btns+=`<button class="page-btn" data-p="1">1</button>${start>2?'<span style="color:var(--text3);padding:0 4px">…</span>':''}`;
+  for(let i=start;i<=end;i++) btns+=`<button class="page-btn${i===currentPage?' active':''}" data-p="${i}">${i}</button>`;
+  if(end<pages) btns+=`${end<pages-1?'<span style="color:var(--text3);padding:0 4px">…</span>':''}<button class="page-btn" data-p="${pages}">${pages}</button>`;
+  pag.innerHTML=`<div class="page-info">Showing ${from}–${to} of ${total}</div><div class="page-btns">
+    <button class="page-btn" data-p="${currentPage-1}" ${currentPage===1?'disabled':''}>‹</button>${btns}
+    <button class="page-btn" data-p="${currentPage+1}" ${currentPage===pages?'disabled':''}>›</button>
+  </div>`;
+  pag.querySelectorAll('.page-btn[data-p]').forEach(btn => {
+    btn.addEventListener('click', () => { const p=parseInt(btn.dataset.p); if(p>=1&&p<=pages){currentPage=p;applyTxnFilter();} });
+  });
+}
+
+// ===== EXPORT =====
+document.getElementById('exportCsvBtn').addEventListener('click', () => {
+  let txns = filteredTxns();
+  const q = txnFilter.search.toLowerCase();
+  if (q) txns = txns.filter(t => t.payee.toLowerCase().includes(q));
+  if (txnFilter.type==='debit') txns=txns.filter(t=>t.amount<0);
+  if (txnFilter.type==='credit') txns=txns.filter(t=>t.amount>0);
+  const rows = [['Date','Payee','Type','Amount','Balance','Tag']].concat(
+    txns.map(t => {
+      const tag = state.tags.find(g=>g.id===t.tag);
+      return [t.date, `"${t.payee.replace(/"/g,'""')}"`, t.txType, t.amount, t.balance||'', tag?tag.name:''];
+    })
+  );
+  const csv = rows.map(r=>r.join(',')).join('\n');
+  const blob = new Blob([csv], {type:'text/csv'});
+  const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='ledger_transactions.csv'; a.click();
+  toast('CSV exported', 'success');
+});
+
+// ===== IMPORT (JSON) =====
+function renderImportPage() {
+  const list = document.getElementById('importedFilesList');
+  list.innerHTML = state.importedFiles.map((f,i) => {
+    const iconColor = f.status==='success' ? 'var(--green)' : f.status==='warning' ? 'var(--yellow)' : 'var(--red)';
+    const verifyHtml = f.verify ? `<div class="file-verify ${f.verify.pass?'pass':'fail'}">${esc(f.verify.msg)}</div>` : '';
+    return `<div class="imported-file ${f.status}">
+      <div class="file-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="${iconColor}" stroke-width="2" width="18" height="18">
+          <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/>
+        </svg>
+      </div>
+      <div class="file-info">
+        <div class="file-name">${esc(f.name)}</div>
+        <div class="file-status ${f.status==='success'?'ok':f.status==='warning'?'warn':'err'}">${esc(f.message)}</div>
+        ${verifyHtml}
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="deleteStatement(${i})" title="Remove this statement" style="flex-shrink:0">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
+          <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a1 1 0 011-1h4a1 1 0 011 1v2"/>
+        </svg>
+        Delete
+      </button>
+    </div>`;
+  }).join('');
+}
+
+window.deleteStatement = function(idx) {
+  const file = state.importedFiles[idx];
+  if (!confirm(`Remove "${file.name}" and its transactions?`)) return;
+  const before = state.transactions.length;
+  state.transactions = state.transactions.filter(t => t.source !== file.name);
+  const removed = before - state.transactions.length;
+  state.importedFiles.splice(idx, 1);
+  save(); initMonths(); renderImportPage();
+  toast(`Removed ${removed} transactions from "${file.name}"`, 'info');
+};
+
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('drag-over'); handleFiles(e.dataTransfer.files); });
+fileInput.addEventListener('change', e => { handleFiles(e.target.files); fileInput.value=''; });
+
+document.getElementById('clearAllData').addEventListener('click', () => {
+  if (!confirm('Clear ALL imported data? This cannot be undone.')) return;
+  state.transactions=[]; state.importedFiles=[]; state.selectedMonths=[]; state.payeeTags={};
+  save(); renderImportPage(); initMonths();
+  toast('All data cleared', 'info');
+});
+
+async function handleFiles(files) {
+  const arr = Array.from(files).filter(f => f.name.toLowerCase().endsWith('.json'));
+  if (!arr.length) { toast('Please upload JSON files', 'error'); return; }
+  for (const file of arr) {
+    await processJSON(file);
+  }
+  renderImportPage();
+}
+
+// ===== JSON PARSER =====
+async function processJSON(file) {
+  try {
+    const text = await file.text();
+
+    // Show preview of raw JSON
+    const preview = document.getElementById('jsonPreview');
+    preview.style.display = 'block';
+    preview.textContent = text.length > 1000 ? text.slice(0, 1000) + '\n…(truncated)' : text;
+
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch(e) {
+      addImportedFile(file.name, 'error', 'Invalid JSON: ' + e.message, null);
+      toast('Invalid JSON in ' + file.name, 'error');
+      return;
+    }
+
+    parseStatementJSON(data, file.name);
+  } catch(e) {
+    addImportedFile(file.name, 'error', 'Failed to read file: ' + e.message, null);
+    toast('Error reading ' + file.name, 'error');
+  }
+}
+
+function parseAmountStr(amtStr) {
+  // Handles "8.00-" (debit) or "8.00+" (credit) or "8.00" (default credit)
+  if (!amtStr) return null;
+  const s = String(amtStr).trim();
+  const neg = s.endsWith('-');
+  const pos = s.endsWith('+');
+  const num = parseFloat(s.replace(/,/g, '').replace(/[-+]$/, ''));
+  if (isNaN(num)) return null;
+  return neg ? -num : num; // positive if no sign or '+'
+}
+
+function parseStatementJSON(data, fileName) {
+  // Support both { statement, transactions } and bare array
+  const txList = Array.isArray(data) ? data : (data.transactions || []);
+  const stmtMeta = Array.isArray(data) ? null : (data.statement || null);
+
+  if (!txList.length) {
+    addImportedFile(fileName, 'error', 'No transactions found in JSON.', null);
+    return;
+  }
+
+  // Infer year from fileName (e.g. statement_2024.json) or current year
+  const yearMatch = fileName.match(/20\d{2}/);
+  const baseYear = yearMatch ? parseInt(yearMatch[0]) : new Date().getFullYear();
+
+  const transactions = [];
+  for (const item of txList) {
+    const dateStr = item.date || item.Date || '';
+    if (!dateStr) continue;
+
+    // Parse DD/MM format
+    const [dd, mm] = dateStr.split('/').map(Number);
+    if (!dd || !mm) continue;
+    if (dd < 1 || dd > 31 || mm < 1 || mm > 12) continue;
+    const dateISO = `${baseYear}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`;
+
+    // Amount
+    const rawAmt = item.amount || item.Amount || '0';
+    const amount = parseAmountStr(rawAmt);
+    if (amount === null) continue;
+
+    // Balance
+    const rawBal = item.balance || item.Balance || null;
+    const balance = rawBal ? parseFloat(String(rawBal).replace(/,/g, '')) : null;
+
+    // Payee / name
+    let payee = '';
+    if (item.details) {
+      payee = item.details.name || item.details.payee || '';
+    }
+    if (!payee) payee = item.payee || item.name || item.description || item.Payee || 'Unknown';
+    payee = payee.replace(/\*+$/, '').trim();
+    if (payee === payee.toUpperCase() && payee.length > 3) payee = toTitleCase(payee);
+
+    // Type
+    const txType = item.type || item.Type || item.txType || '';
+
+    transactions.push({ dateISO, payee, txType, amount, balance });
+  }
+
+  if (!transactions.length) {
+    addImportedFile(fileName, 'error', 'Could not parse any transactions from JSON.', null);
+    return;
+  }
+
+  // Verification against statement metadata
+  let verifyResult = null;
+  if (stmtMeta) {
+    const stmtDebit = stmtMeta.total_debit ? parseFloat(String(stmtMeta.total_debit).replace(/,/g,'')) : null;
+    const stmtCredit = stmtMeta.total_credit ? parseFloat(String(stmtMeta.total_credit).replace(/,/g,'')) : null;
+    if (stmtDebit !== null && stmtCredit !== null) {
+      const parsedDebit = round2(transactions.filter(t=>t.amount<0).reduce((s,t)=>s+Math.abs(t.amount),0));
+      const parsedCredit = round2(transactions.filter(t=>t.amount>0).reduce((s,t)=>s+t.amount,0));
+      const debitMatch = Math.abs(parsedDebit - stmtDebit) < 0.02;
+      const creditMatch = Math.abs(parsedCredit - stmtCredit) < 0.02;
+      const pass = debitMatch && creditMatch;
+      verifyResult = {
+        pass,
+        msg: pass
+          ? `✓ Verified: Debit RM${stmtDebit.toFixed(2)}, Credit RM${stmtCredit.toFixed(2)}`
+          : `⚠ Mismatch — Statement: D${stmtDebit.toFixed(2)} C${stmtCredit.toFixed(2)} | Parsed: D${parsedDebit.toFixed(2)} C${parsedCredit.toFixed(2)}`
+      };
+    }
+  }
+
+  let added = 0, skipped = 0;
+  for (const tx of transactions) {
+    const isDup = state.transactions.some(t =>
+      t.date === tx.dateISO && t.payee === tx.payee && Math.abs(t.amount - tx.amount) < 0.005
+    );
+    // if (isDup) { skipped++; continue; }
+    const txn = { id: genId(), date: tx.dateISO, payee: tx.payee, txType: tx.txType, amount: tx.amount, balance: tx.balance, tag: null, source: fileName };
+    autoTagTxn(txn);
+    state.transactions.push(txn);
+    added++;
+  }
+
+  save(); initMonths();
+  const msg = `${added} imported${skipped ? `, ${skipped} duplicates skipped` : ''}`;
+  addImportedFile(fileName, verifyResult && !verifyResult.pass ? 'warning' : 'success', msg, verifyResult);
+  toast(`${fileName}: ${msg}`, 'success');
+}
+
+function toTitleCase(str) {
+  return str.toLowerCase().replace(/\b(\w)/g, c => c.toUpperCase());
+}
+function round2(n) { return Math.round(n * 100) / 100; }
+
+function addImportedFile(name, status, message, verify) {
+  state.importedFiles = state.importedFiles.filter(f => f.name !== name);
+  state.importedFiles.unshift({ name, status, message, verify });
+  if (state.importedFiles.length > 50) state.importedFiles = state.importedFiles.slice(0, 50);
+}
+
+// ===== TAGS =====
+function renderTags() {
+  const grid = document.getElementById('tagsGrid');
+  const tagItems = state.tags.map(tag => {
+    const count = state.transactions.filter(t => t.tag === tag.id).length;
+    const payees = [...new Set(state.transactions.filter(t => t.tag === tag.id).map(t => t.payee))].slice(0, 5);
+    const payeeHtml = payees.length
+      ? `<div class="tag-payees">${payees.map(p=>`<span class="payee-chip">${esc(p)}</span>`).join('')}</div>`
+      : '<div style="font-size:0.73rem;color:var(--text3);margin-top:6px">No transactions tagged</div>';
+    const ruleHtml = tag.rules && tag.rules.length
+      ? `<div style="font-size:0.72rem;color:var(--text3);margin-top:6px">Rules: ${tag.rules.slice(0,3).map(r=>`<span style="font-family:var(--mono)">${esc(r)}</span>`).join(', ')}${tag.rules.length>3?`…+${tag.rules.length-3}`:''}</div>`
+      : '';
+    return `<div class="tag-card">
+      <div class="tag-card-actions">
+        <button class="icon-btn" onclick="openEditTag('${tag.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+        <button class="icon-btn danger" onclick="deleteTag('${tag.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg></button>
+      </div>
+      <div class="tag-card-header">
+        <div class="tag-color-swatch" style="background:${tag.color}"></div>
+        <div class="tag-card-name">${esc(tag.name)}</div>
+      </div>
+      <div class="tag-card-count">${count} transaction${count!==1?'s':''}</div>
+      ${payeeHtml}${ruleHtml}
+    </div>`;
+  }).join('');
+
+  const newCard = `<div class="new-tag-card">
+    <h3>+ New Tag</h3>
+    <div class="form-row">
+      <div class="form-group"><label>Name</label><input type="text" class="form-input" id="newTagName" placeholder="e.g. Food & Dining"></div>
+      <div class="form-group" style="max-width:80px"><label>Color</label><input type="color" class="form-input" id="newTagColor" value="#4f8cff"></div>
+    </div>
+    <button class="btn btn-primary btn-sm" onclick="createTag()">Create Tag</button>
+  </div>`;
+
+  grid.innerHTML = tagItems + newCard;
+}
+
+window.createTag = function() {
+  const name = document.getElementById('newTagName').value.trim();
+  if (!name) { toast('Enter a tag name', 'error'); return; }
+  const color = document.getElementById('newTagColor').value;
+  state.tags.push({ id: genId(), name, color, rules: [] });
+  save(); renderTags(); updateTagFilter();
+  toast(`Tag "${name}" created`, 'success');
+};
+
+window.deleteTag = function(id) {
+  if (!confirm('Delete this tag?')) return;
+  state.tags = state.tags.filter(t => t.id !== id);
+  state.transactions.forEach(t => { if (t.tag === id) t.tag = null; });
+  Object.keys(state.payeeTags).forEach(k => { if (state.payeeTags[k] === id) delete state.payeeTags[k]; });
+  save(); renderTags(); updateTagFilter(); renderDashboard();
+  toast('Tag deleted', 'info');
+};
+
+window.openEditTag = function(id) {
+  editingTagId = id;
+  const tag = state.tags.find(t => t.id === id);
+  if (!tag) return;
+  document.getElementById('editTagTitle').textContent = `Edit: ${tag.name}`;
+  document.getElementById('editTagName').value = tag.name;
+  document.getElementById('editTagColor').value = tag.color;
+  renderRuleList(tag.rules || []);
+  document.getElementById('editTagModal').classList.add('open');
+};
+
+function renderRuleList(rules) {
+  document.getElementById('ruleList').innerHTML = rules.map((r, i) =>
+    `<div class="rule-item"><span class="rule-item-text">${esc(r)}</span>
+    <button class="rule-remove" onclick="removeRule(${i})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>`
+  ).join('');
+}
+
+window.removeRule = function(idx) {
+  const tag = state.tags.find(t => t.id === editingTagId);
+  if (!tag) return;
+  tag.rules.splice(idx, 1);
+  renderRuleList(tag.rules);
+};
+
+document.getElementById('addRuleBtn').addEventListener('click', () => {
+  const inp = document.getElementById('newRuleInput');
+  const val = inp.value.trim();
+  if (!val) return;
+  const tag = state.tags.find(t => t.id === editingTagId);
+  if (!tag) return;
+  if (!tag.rules) tag.rules = [];
+  val.split(',').map(v=>v.trim()).filter(Boolean).forEach(v => { if (!tag.rules.includes(v)) tag.rules.push(v); });
+  inp.value = '';
+  renderRuleList(tag.rules);
+});
+document.getElementById('newRuleInput').addEventListener('keydown', e => { if (e.key==='Enter') document.getElementById('addRuleBtn').click(); });
+
+document.getElementById('editTagSave').addEventListener('click', () => {
+  const tag = state.tags.find(t => t.id === editingTagId);
+  if (!tag) return;
+  const name = document.getElementById('editTagName').value.trim();
+  if (!name) { toast('Tag name required', 'error'); return; }
+  tag.name = name; tag.color = document.getElementById('editTagColor').value;
+  reapplyAllAutoTags();
+  save(); renderTags(); renderTransactions(); renderDashboard(); updateTagFilter();
+  document.getElementById('editTagModal').classList.remove('open');
+  toast('Tag saved', 'success');
+});
+document.getElementById('editTagCancel').addEventListener('click', () => { document.getElementById('editTagModal').classList.remove('open'); editingTagId = null; });
+
+// ===== UTILS =====
+function genId() { return Math.random().toString(36).slice(2) + Date.now().toString(36); }
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function formatDate(iso) {
+  const d = new Date(iso); if (isNaN(d)) return iso;
+  return d.toLocaleDateString('en-MY', { day:'2-digit', month:'short', year:'numeric' });
+}
+
+// ===== INIT =====
+load();
+initMonths();
+renderDashboard();
+</script>
+</body>
+</html>
