@@ -239,7 +239,9 @@ function save() {
     const toSave = {
       transactions: state.transactions,
       selectedMonths: state.selectedMonths,
-      importedFiles: state.importedFiles
+      importedFiles: state.importedFiles,
+      tags: state.tags,
+      payeeTags: state.payeeTags
     };
     localStorage.setItem('ledger_state', JSON.stringify(toSave));
   } catch(e) { toast('Storage full', 'error'); }
@@ -255,9 +257,9 @@ function load() {
       state.importedFiles = parsed.importedFiles || [];
       // Clean up any interrupted uploads that never finished
       state.importedFiles = state.importedFiles.filter(f => f.status !== 'info');
+      state.tags = parsed.tags || [];
+      state.payeeTags = parsed.payeeTags || {};
     }
-    state.tags = [];
-    state.payeeTags = {};
   } catch(e) {}
 }
 
