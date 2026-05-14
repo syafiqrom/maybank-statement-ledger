@@ -128,8 +128,6 @@ tr:hover td { background: var(--bg3); color: var(--text); }
 .drop-zone p { color: var(--text2); font-size: 0.875rem; }
 .drop-zone input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
 
-.json-preview { margin-top: 20px; background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 16px; font-family: var(--mono); font-size: 0.75rem; color: var(--text2); max-height: 200px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; display: none; }
-
 .imported-files { margin-top: 24px; display: flex; flex-direction: column; gap: 10px; }
 .imported-file { display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-sm); transition: var(--transition); }
 .imported-file.success { border-color: rgba(61,214,140,0.3); }
@@ -147,7 +145,11 @@ tr:hover td { background: var(--bg3); color: var(--text); }
 .file-verify.fail { background: rgba(255,192,67,0.1); color: var(--yellow); }
 
 /* TAGS */
-.tags-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; margin-bottom: 28px; }
+.tags-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.tags-file-status { font-size: 0.78rem; font-family: var(--mono); color: var(--text3); padding: 6px 12px; background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius-sm); display: flex; align-items: center; gap: 6px; }
+.tags-file-status.loaded { color: var(--green); border-color: rgba(61,214,140,0.3); background: rgba(61,214,140,0.06); }
+.tags-file-status.unsaved { color: var(--yellow); border-color: rgba(255,192,67,0.3); background: rgba(255,192,67,0.06); }
+.tags-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; margin-bottom: 28px; margin-top: 20px; }
 .tag-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; box-shadow: var(--card-glow); transition: var(--transition); position: relative; }
 .tag-card:hover { border-color: var(--border2); }
 .tag-card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
