@@ -934,28 +934,63 @@ function parseStatementJSON(data, fileName) {
   const txList = Array.isArray(data) ? data : (data.transactions || []);
   const stmtMeta = Array.isArray(data) ? null : (data.statement || null);
   if (!txList.length) { addImportedFile(fileName, 'error', 'No transactions found in JSON.', null); return; }
+
   const yearMatch = fileName.match(/20\d{2}/);
   const baseYear = yearMatch ? parseInt(yearMatch[0]) : new Date().getFullYear();
+
+  // Month name → number for RHB format ("29Mar", "31Jan")
+  const MONTHS = { jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12 };
+
+  function parseDateStr(dateStr) {
+    if (!dateStr) return null;
+    // Maybank: "DD/MM"
+    if (dateStr.includes('/')) {
+      const [dd, mm] = dateStr.split('/').map(Number);
+      if (!dd || !mm || dd < 1 || dd > 31 || mm < 1 || mm > 12) return null;
+      return `${baseYear}-${String(mm).padStart(2,'0')}-${String(dd).padStart(2,'0')}`;
+    }
+    // RHB: "29Mar", "31Jan"
+    const m = dateStr.match(/^(\d{2})([A-Za-z]{3})$/);
+    if (m) {
+      const dd = parseInt(m[1]);
+      const mm = MONTHS[m[2].toLowerCase()];
+      if (!dd || !mm) return null;
+      return `${baseYear}-${String(mm).padStart(2,'0')}-${String(dd).padStart(2,'0')}`;
+    }
+    return null;
+  }
+
+  function parseAmount(item) {
+    // Maybank: single "amount" field with +/- suffix
+    if (item.amount !== undefined) return parseAmountStr(item.amount);
+    // RHB: separate debit / credit fields
+    if (item.debit  != null) return parseAmountStr('-' + item.debit);
+    if (item.credit != null) return parseAmountStr(item.credit);
+    return null;
+  }
+
   const transactions = [];
   for (const item of txList) {
     const dateStr = item.date || item.Date || '';
-    if (!dateStr) continue;
-    const [dd, mm] = dateStr.split('/').map(Number);
-    if (!dd || !mm || dd < 1 || dd > 31 || mm < 1 || mm > 12) continue;
-    const dateISO = `${baseYear}-${String(mm).padStart(2,'0')}-${String(dd).padStart(2,'0')}`;
-    const rawAmt = item.amount || item.Amount || '0';
-    const amount = parseAmountStr(rawAmt);
+    const dateISO = parseDateStr(dateStr);
+    if (!dateISO) continue;
+
+    const amount = parseAmount(item);
     if (amount === null) continue;
+
     const rawBal = item.balance || item.Balance || null;
     const balance = rawBal ? parseFloat(String(rawBal).replace(/,/g, '')) : null;
+
     let payee = '';
     if (item.details) payee = item.details.name || item.details.payee || '';
     if (!payee) payee = item.payee || item.name || item.description || item.Payee || 'Unknown';
     payee = payee.replace(/\*+$/, '').trim();
     if (payee === payee.toUpperCase() && payee.length > 3) payee = toTitleCase(payee);
-    const txType = item.type || item.Type || item.txType || '';
+
+    const txType = item.type || item.Type || item.txType || item.description || '';
     transactions.push({ dateISO, payee, txType, amount, balance });
   }
+
   if (!transactions.length) { addImportedFile(fileName, 'error', 'Could not parse any transactions from JSON.', null); return; }
   let verifyResult = null;
   if (stmtMeta) {
