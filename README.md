@@ -6,10 +6,10 @@ A local web app for importing, tagging, and analysing Maybank (and RHB) PDF bank
 
 ## Screenshots
 
-<img src="./public/dashboard.png" width="400" alt="Dashboard Page">
-<img src="./public/transactions.png" width="400" alt="Transactions Page">
-<img src="./public/reports.png" width="400" alt="Reports Page">
-<img src="./public/tags.png" width="400" alt="Tags Page">
+<img src="./public/dashboard.png" alt="Dashboard Page">
+<img src="./public/transactions.png" alt="Transactions Page">
+<img src="./public/reports.png" alt="Reports Page">
+<img src="./public/tags.png" alt="Tags Page">
 
 ---
 
