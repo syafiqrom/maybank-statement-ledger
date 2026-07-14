@@ -1,134 +1,249 @@
-# M-Ledger — Bank Statement Analyser for Maybank
+# Ledger — React Edition
 
-A fully local, privacy-first bank statement analyser. Your PDFs never leave your machine.
+A local web app for importing, tagging, and analysing Maybank (and RHB) PDF bank statements. All data stays on your machine — no accounts, no cloud, no third-party servers.
+
+---
+
+## Screenshots
+
+<img src="./public/dashboard.png" width="400" alt="Dashboard Page">
+<img src="./public/transactions.png" width="400" alt="Transactions Page">
+<img src="./public/reports.png" width="400" alt="Reports Page">
+<img src="./public/tags.png" width="400" alt="Tags Page">
 
 ---
 
 ## How It Works
 
+Ledger is a two-process app: a small Python backend that reads your PDF, and a React frontend that handles everything else.
+
 ```
-PDF on your disk
-      ↓
-Flask (app.py) — runs pdfplumber locally
-      ↓
-JSON returned to browser
-      ↓
-index.html — displays, tags, and analyses your transactions
+Your PDF statement
+      │
+      ▼
+Flask backend (app.py)          ← runs on http://127.0.0.1:5000
+  • Extracts text from the PDF
+  • Detects bank format (Maybank / RHB)
+  • Parses transactions + statement metadata
+  • Returns structured JSON
+      │
+      ▼
+React frontend (Vite)           ← runs on http://localhost:5173
+  • Renders the JSON into a transaction list
+  • Verifies balances match the statement totals
+  • Stores everything in your browser's localStorage
+  • Lets you tag, filter, search, and chart your spending
 ```
 
-Everything runs on `127.0.0.1`. No cloud, no accounts, no data sent anywhere.
+The frontend is entirely static after the initial PDF import — once a statement is parsed, the backend is no longer involved. Transactions persist in `localStorage` between sessions.
 
 ---
 
 ## Requirements
 
-### System
-
 | Requirement | Version |
 |---|---|
-| Python | 3.8 or newer |
-| A modern browser | Chrome, Firefox, Edge, Safari |
+| Python | 3.9 or newer |
+| Node.js | 18 or newer |
+| npm | 9 or newer |
 
-### Python packages
-
-| Package | Purpose |
-|---|---|
-| `flask` | Local web server that serves the app and converts PDFs |
-| `flask-cors` | Allows the browser to call the Flask API |
-| `pdfplumber` | Extracts text from bank statement PDFs |
+The app has been tested on macOS and Linux. Windows users may need to run the two startup commands in separate terminal windows.
 
 ---
 
 ## Installation
 
-**1. Clone or download this project**
+### 1. Clone the repository
 
-```
-your_folder/
-├── app.py
-├── index.html
-├── requirements.txt
-├── styles.css
+```bash
+git clone <repo-url>
+cd maybank-statement-ledger
 ```
 
-**2. Install Python dependencies**
+### 2. Install Python dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-If you are on a system with a managed Python environment (e.g. Ubuntu 24+):
+### 3. Install Node dependencies
 
 ```bash
-pip install -r requirements.txt --break-system-packages
+npm install
 ```
+
 ---
 
 ## Running the App
 
+Both processes must be running at the same time. Open two terminal tabs.
+
+**Terminal 1 — Flask backend:**
 ```bash
 python app.py
+# Listening on http://127.0.0.1:5000
 ```
 
-Then open your browser and go to:
-
+**Terminal 2 — React frontend (dev mode):**
+```bash
+npm run dev
+# Listening on http://localhost:5173
 ```
-http://127.0.0.1:5000
+
+Then open **http://localhost:5173** in your browser.
+
+### Production build
+
+If you want a single deployable bundle instead of the Vite dev server:
+
+```bash
+npm run build      # output written to dist/
 ```
 
-Keep the terminal open while using the app. To stop the server, press `Ctrl+C`.
+Serve the `dist/` folder with any static host (Nginx, Caddy, GitHub Pages, etc.). The Flask backend must still be reachable at `http://127.0.0.1:5000` for PDF import to work.
 
 ---
 
 ## Usage
 
-### Importing a Statement
+### Importing a statement
 
-1. Go to the **Import** page
-2. Drag and drop your bank statement PDF, or click **Browse Files**
-3. The app converts it automatically — no manual steps needed
-4. A balance verification result is shown (✓ or ⚠) if the PDF contains totals
+1. Go to **Import** in the sidebar.
+2. Drag and drop one or more Maybank or RHB PDF statement files onto the drop zone, or click **Browse Files** to pick them.
+3. Each file is sent to the Flask backend, parsed, and added to your transaction list.
+4. A balance verification check runs automatically — a ✓ means the parsed totals match the statement's own BEGINNING/ENDING BALANCE figures.
 
-### Tagging Transactions
+> **Password-protected PDFs:** Remove the password from the PDF before importing. The app will display a clear error message if it encounters a protected file.
 
-1. Go to **Tag Manager** and create tags (e.g. Food, Transport, Salary)
-2. Add keyword rules — any transaction whose payee contains the keyword gets auto-tagged on import
-3. On the **Transactions** page, click the tag badge on any row to manually assign or change a tag
-4. Tagging by payee applies to **all transactions from that payee** at once
+### Dashboard
 
-### Back Up Tags
+Shows a summary for the selected time period:
 
-Tags are saved in LocalStorage. To back up the tags:
+- Total income, total expenses, and net balance
+- Spending breakdown by tag (pie chart)
+- Monthly spending trend (bar chart)
+- Use the month filter at the top to focus on one or more months
 
-- Click **Save Tags JSON** to export your tags to a `.json` file
-- On your next session, click **Load Tags JSON** to restore them
+### Transactions
 
-This keeps your tags portable and separate from transaction data.
+A searchable, filterable table of all imported transactions. You can:
 
-### Filtering & Export
+- Search by payee name or description
+- Filter by month, tag, or transaction type (debit / credit)
+- Assign or change a tag on any transaction inline
 
-- Filter transactions by month, type (income/expense), tag, or search by payee
-- Click **Export CSV** to download the currently filtered view
+### Reports
+
+Generate a summary for a custom date range. Set a **From** and **To** date to see all transactions in that period, with income/expense totals.
+
+### Tag Manager
+
+Tags let you categorise your spending (e.g. Food, Transport, Utilities).
+
+- **Create** a tag with a name and a colour.
+- **Auto-tagging:** when you tag a transaction, the payee is remembered. Future imports from the same payee are tagged automatically.
+- **Export tags** as a `tags.json` file to back them up or share across devices.
+- **Import tags** from a previously saved `tags.json` to restore your setup.
 
 ---
 
 ## Data & Privacy
 
-| Data | Where it lives |
-|---|---|
-| Transactions | Browser `localStorage` only |
-| Tags | Loaded from / saved to a `.json` file you control |
-| PDFs | Opened in memory, temp file deleted immediately after parsing |
-| Anything else | Nowhere — no database, no server storage, no internet |
+- **Nothing leaves your machine.** PDF parsing happens on `127.0.0.1` — the Flask server only accepts connections from `localhost` and the Vite dev server.
+- **Transactions are stored in `localStorage`** in your browser. They are not sent anywhere after the initial PDF parse.
+- **PDF files are not stored.** The backend writes the uploaded file to a temporary path, parses it, and deletes it immediately — win or lose.
+- **Tags are stored in `localStorage`** and can be exported to a local JSON file for backup.
+- Clearing your browser's site data for `localhost` will erase all transactions and tags. Export your tags before doing so.
 
-Clearing your browser's site data for `127.0.0.1` will erase all transaction history.
+---
+
+## Testing
+
+### Python backend tests
+
+```bash
+pip install -r requirements-dev.txt
+pytest
+```
+
+The test suite uses synthetic PDFs generated by `reportlab` — no real bank statements are needed.
+
+### Frontend unit tests (Vitest)
+
+```bash
+npm test             # run once
+npm run test:watch   # re-run on file changes
+```
+
+Tests live in `src/utils/__tests__/` and cover the statement parser and tag utilities.
+
+### Linting
+
+```bash
+npm run lint         # oxlint
+```
 
 ---
 
 ## Troubleshooting
 
-**"Cannot reach local server"**
-→ Make sure `python app.py` is running in your terminal before uploading.
+**"No text could be extracted from this PDF"**
+Your statement is likely a scanned image rather than a text-based PDF. OCR is not currently supported. Download a fresh copy of the statement directly from Maybank2u or your internet banking portal — these are always text-based.
 
-**Balance verification shows ⚠ mismatch**
-→ Not all transactions parsed correctly, or the PDF totals include items the parser skipped (e.g. dividend entries). Check the transaction count against your statement.
+**"This PDF is password-protected"**
+Open the PDF in Preview (macOS) or Adobe Acrobat, remove the password, save, and re-import.
+
+**"Unrecognised bank statement format"**
+Only Maybank current/savings account statements and RHB statements are supported. Credit card statements and statements from other banks will not parse correctly.
+
+**Balance verification shows ✗ (fail)**
+This means the sum of parsed transactions does not match the BEGINNING/ENDING BALANCE printed on your statement. It usually indicates a multi-page statement where one page failed to extract. Check that the full PDF was uploaded and try again. The transactions are still imported — the warning is informational.
+
+**The frontend loads but imports fail (network error)**
+Make sure `python app.py` is running in a separate terminal. The React app calls `http://127.0.0.1:5000/convert` for PDF parsing — if the backend is not running, imports will silently fail or show a network error.
+
+**localStorage is getting full**
+A warning appears in the app when storage usage approaches 4 MB. To free space, go to **Import** and delete statements you no longer need, or click **Clear All Data**.
+
+**Port already in use**
+If port 5000 is taken on macOS (Monterey+, AirPlay Receiver uses it), stop AirPlay Receiver under System Settings → General → AirDrop & Handoff, or change the port in `app.py`:
+```python
+app.run(host="127.0.0.1", port=5001, debug=False)
+```
+Then update the CORS origins list in `app.py` accordingly and restart both processes.
+
+---
+
+## Project Structure
+
+```
+maybank-statement-ledger/
+├── app.py                  # Flask backend — PDF parsing & API
+├── requirements.txt        # Python runtime dependencies
+├── requirements-dev.txt    # Python test-only dependencies (pytest, reportlab)
+├── package.json            # Node dependencies & scripts
+├── vite.config.js          # Vite + Vitest config
+├── index.html              # HTML entry point
+├── styles.css              # Global styles (production build)
+├── src/
+│   ├── main.jsx            # React entry point
+│   ├── App.jsx             # Root component, routing, theme
+│   ├── context/
+│   │   └── AppContext.jsx  # Global state (transactions, tags, localStorage)
+│   ├── pages/
+│   │   ├── Dashboard.jsx   # Charts & summary cards
+│   │   ├── Transactions.jsx# Searchable transaction list
+│   │   ├── Reports.jsx     # Date-range reports
+│   │   ├── Import.jsx      # PDF upload UI
+│   │   └── Tags.jsx        # Tag management
+│   ├── components/         # Shared UI components
+│   ├── hooks/              # useTagManager, useConfirm, usePagination
+│   └── utils/
+│       ├── parseStatement.js   # Frontend JSON→transaction parser
+│       ├── tags.js             # Tag utilities & auto-tagging logic
+│       └── __tests__/          # Vitest unit tests
+└── tests/                  # pytest backend tests
+    ├── test_parsers.py
+    ├── test_routes.py
+    └── conftest.py
+```

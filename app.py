@@ -1,12 +1,28 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import pdfplumber
+from pdfminer.pdfdocument import PDFPasswordIncorrect
+from pdfminer.pdfparser import PDFSyntaxError
+from pdfplumber.utils.exceptions import PdfminerException
 import re
 import tempfile
 import os
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 app = Flask(__name__)
-CORS(app, origins=["http://localhost:5000", "http://127.0.0.1:5000", "null"])
+# Only allow the origins this app is actually meant to be used from.
+# NOTE: "null" was previously allowed here to support opening index.html
+# directly via file://, but "null" is also the Origin header sent by many
+# untrusted/sandboxed contexts (data: URIs, sandboxed iframes, some
+# downloaded HTML files) — allowing it means ANY such page on the visitor's
+# machine could make requests to this local server. The documented (and
+# only supported) way to use this app is via `python app.py` +
+# http://127.0.0.1:5000, so we restrict CORS to that.
+CORS(app, origins=[
+    "http://localhost:5000",  "http://127.0.0.1:5000",   # original (Flask-served)
+    "http://localhost:5173",  "http://127.0.0.1:5173",   # Vite dev server
+])
 
 
 # ================================================================
@@ -73,9 +89,11 @@ def _mb_parse_transactions(lines):
 
 
 def parse_maybank(lines):
+    meta = _mb_extract_metadata(lines)
+    meta["statement_year"] = _extract_statement_year(lines)
     return {
         "bank":         "Maybank",
-        "statement":    _mb_extract_metadata(lines),
+        "statement":    meta,
         "transactions": _mb_parse_transactions(lines),
     }
 
@@ -115,23 +133,55 @@ RHB_PROFIT_CREDITED = re.compile(
     r"ProfitCredited/Keuntunganyangdikreditkan\s*:\s*([\d,]+\.\d{2})"
 )
 
-# Debit descriptions (the balance goes DOWN = debit).
-# We determine debit vs credit by comparing balance: if balance decreases it's debit.
+# Known transaction-description keywords, used as the PRIMARY signal for
+# debit/credit classification (balance comparison is only a fallback — see
+# _rhb_classify_amount below).
 RHB_DEBIT_KEYWORDS = {"MBKSTDR", "DMBASNBSCDR", "DMBASNBDR"}
+RHB_CREDIT_KEYWORDS = {"PROFITCREDIT", "DMBASNBCR", "MBKSTCR"}
 
 # Page 2 is the commodity trading notice — skip lines inside it
-RHB_PAGE2_MARKER = "NOTICEОНCOMPLETIONOFTRADING"
 RHB_PAGE2_START = "NOTICEONCOMPLETIONOFTRADING"
 
 
 def _rhb_classify_amount(desc, prev_balance, curr_balance, amount):
-    """Return (debit, credit) tuple — one will be None, one will be the amount string."""
-    prev = float(prev_balance.replace(",", ""))
-    curr = float(curr_balance.replace(",", ""))
-    if curr < prev:
-        return amount, None   # debit
+    """Return (debit, credit) tuple — one will be None, one will be the amount string.
+
+    Classification priority:
+      1. Known keyword in the description (most reliable — independent of
+         balance arithmetic, so it can't be fooled by same-line netting,
+         OCR/line-merge glitches, or a misread balance figure).
+      2. Balance-diff fallback for descriptions we don't recognise yet.
+
+    If both signals are available and disagree, we trust the keyword but
+    note the conflict in the returned dict so it surfaces during import
+    review rather than failing silently.
+    """
+    desc_key = desc.upper().replace(" ", "")
+
+    keyword_says = None
+    if any(kw in desc_key for kw in RHB_DEBIT_KEYWORDS):
+        keyword_says = "debit"
+    elif any(kw in desc_key for kw in RHB_CREDIT_KEYWORDS):
+        keyword_says = "credit"
+
+    try:
+        prev = float(prev_balance.replace(",", ""))
+        curr = float(curr_balance.replace(",", ""))
+        balance_says = "debit" if curr < prev else "credit"
+    except (TypeError, ValueError):
+        balance_says = None
+
+    classification = keyword_says or balance_says or "credit"
+    conflict = (
+        keyword_says is not None
+        and balance_says is not None
+        and keyword_says != balance_says
+    )
+
+    if classification == "debit":
+        return amount, None, conflict
     else:
-        return None, amount   # credit
+        return None, amount, conflict
 
 
 def parse_rhb(lines):
@@ -158,6 +208,8 @@ def parse_rhb(lines):
         if m:
             meta["profit_credited"] = m.group(1)
             break
+
+    meta["statement_year"] = _extract_statement_year(lines)
 
     # --- skip page 2 commodity lines ---
     # Page 2 starts after "NOTICEONCOMPLETIONOFTRADING"
@@ -195,17 +247,22 @@ def parse_rhb(lines):
             amount = txn_match.group(4)
             bal    = txn_match.group(5)
 
-            debit, credit = _rhb_classify_amount(desc, prev_balance, bal, amount)
+            debit, credit, conflict = _rhb_classify_amount(desc, prev_balance, bal, amount)
             prev_balance  = bal
 
-            transactions.append({
+            txn = {
                 "date":        date,
                 "description": desc,
                 "serial_no":   serial,
                 "debit":       debit,
                 "credit":      credit,
                 "balance":     bal,
-            })
+            }
+            if conflict:
+                # Keyword and balance-diff disagreed — keyword was trusted,
+                # but flag it so it's easy to spot-check during review.
+                txn["classification_conflict"] = True
+            transactions.append(txn)
 
     return {
         "bank":         "RHB Islamic Bank",
@@ -232,9 +289,73 @@ def detect_bank(lines):
 #  SHARED UTILITIES
 # ================================================================
 
-def extract_lines(pdf_path):
+# Full dates with an explicit 4-digit year, e.g. statement period headers
+# like "STATEMENT DATE : 31/01/2026" or "PERIOD 01/01/2026 - 31/01/2026".
+# Used to recover the correct year for transactions, which otherwise only
+# carry a day/month (Maybank: "DD/MM", RHB: "DDMon").
+_FULL_DATE_PATTERNS = [
+    re.compile(r"\b\d{2}/\d{2}/(\d{4})\b"),
+    re.compile(r"\b\d{2}-\d{2}-(\d{4})\b"),
+    re.compile(r"\b\d{2}[A-Za-z]{3}(\d{4})\b"),   # e.g. "31Jan2026"
+]
+
+
+def _extract_statement_year(lines):
+    """Best-effort extraction of the statement's year directly from the PDF
+    text (statement date/period headers). Returns a 4-digit year string, or
+    None if nothing was found — callers should fall back sensibly rather
+    than guessing from the uploaded filename, which is often wrong (renamed
+    files, generic names, multi-year batches, etc.)."""
+    for line in lines:
+        for pattern in _FULL_DATE_PATTERNS:
+            match = pattern.search(line)
+            if match:
+                year = match.group(1)
+                if year.startswith(("19", "20")):
+                    return year
+    return None
+
+
+# Guardrails for the /convert upload — a real bank statement is a handful
+# of pages and well under a megabyte of text. Without these limits, a huge
+# or maliciously crafted PDF could tie up this local Flask process (and its
+# single-threaded dev server) for a long time.
+MAX_PDF_SIZE_BYTES = 20 * 1024 * 1024   # 20 MB
+MAX_PDF_PAGES = 50
+
+# Also enforced at the Flask/Werkzeug level as a hard backstop — this makes
+# oversized uploads fail fast (before we even finish receiving the body)
+# rather than only being caught after the fact.
+app.config["MAX_CONTENT_LENGTH"] = MAX_PDF_SIZE_BYTES
+
+
+@app.errorhandler(413)
+def handle_too_large(e):
+    return jsonify({
+        "error": f"File is too large — the limit is "
+                 f"{MAX_PDF_SIZE_BYTES // (1024 * 1024)} MB per statement."
+    }), 413
+
+
+class PDFTooLargeError(Exception):
+    pass
+
+
+def extract_lines(pdf_path, max_pages=None):
+    if max_pages is None:
+        # Read fresh on each call rather than binding as a default-argument
+        # value — a default arg is evaluated once at function-definition
+        # time, so changing MAX_PDF_PAGES afterwards (e.g. via config or in
+        # tests) would silently have no effect.
+        max_pages = MAX_PDF_PAGES
     lines = []
     with pdfplumber.open(pdf_path) as pdf:
+        if len(pdf.pages) > max_pages:
+            raise PDFTooLargeError(
+                f"This PDF has {len(pdf.pages)} pages, which is more than "
+                f"the {max_pages}-page limit for a single statement. Split "
+                f"it into smaller files and import them separately."
+            )
         for page in pdf.pages:
             text = page.extract_text()
             if text:
@@ -261,8 +382,59 @@ def convert():
         tmp_path = tmp.name
 
     try:
-        lines = extract_lines(tmp_path)
-        bank  = detect_bank(lines)
+        # Belt-and-braces size check: MAX_CONTENT_LENGTH catches most
+        # oversized uploads before we get here, but this covers cases where
+        # the reported Content-Length didn't match the actual bytes written.
+        if os.path.getsize(tmp_path) > MAX_PDF_SIZE_BYTES:
+            return jsonify({
+                "error": f"File is too large — the limit is "
+                         f"{MAX_PDF_SIZE_BYTES // (1024 * 1024)} MB per statement."
+            }), 413
+
+        try:
+            lines = extract_lines(tmp_path)
+        except PdfminerException as e:
+            # pdfplumber wraps the *original* pdfminer exception as the sole
+            # arg of its own PdfminerException rather than letting it
+            # propagate directly — so PDFPasswordIncorrect/PDFSyntaxError
+            # raised deep inside pdfminer never reach us unless we unwrap
+            # this first. (Caught by tests/test_routes.py — without this,
+            # both cases fell through to the generic 500 handler below.)
+            cause = e.args[0] if e.args else None
+            if isinstance(cause, PDFPasswordIncorrect):
+                return jsonify({
+                    "error": "This PDF is password-protected. Remove the "
+                             "password and try again."
+                }), 422
+            if isinstance(cause, PDFSyntaxError):
+                return jsonify({
+                    "error": "This file doesn't look like a valid PDF (it "
+                             "may be corrupted or not actually a PDF)."
+                }), 422
+            raise  # unrecognised cause — let the outer handler log & report it
+        except PDFPasswordIncorrect:
+            # Kept as a fallback in case a future pdfplumber version raises
+            # this directly instead of wrapping it.
+            return jsonify({
+                "error": "This PDF is password-protected. Remove the password "
+                         "and try again."
+            }), 422
+        except PDFSyntaxError:
+            return jsonify({
+                "error": "This file doesn't look like a valid PDF (it may be "
+                         "corrupted or not actually a PDF)."
+            }), 422
+        except PDFTooLargeError as e:
+            return jsonify({"error": str(e)}), 422
+
+        if not lines:
+            return jsonify({
+                "error": "No text could be extracted from this PDF. It may be "
+                         "a scanned image rather than a text-based statement — "
+                         "OCR is not currently supported."
+            }), 422
+
+        bank = detect_bank(lines)
 
         if bank == "rhb":
             result = parse_rhb(lines)
@@ -276,8 +448,14 @@ def convert():
 
         return jsonify(result)
 
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        # Don't leak raw exception internals to the client — log server-side
+        # for debugging, return a generic message to the UI.
+        app.logger.exception("Unexpected error while converting %s", pdf_file.filename)
+        return jsonify({
+            "error": "Something went wrong while reading this PDF. Check the "
+                     "terminal running app.py for details."
+        }), 500
 
     finally:
         os.unlink(tmp_path)
@@ -289,7 +467,12 @@ def convert():
 
 @app.route("/")
 def index():
-    return app.send_static_file("index.html")
+    return send_from_directory(BASE_DIR, "index.html")
+
+
+@app.route("/styles.css")
+def styles():
+    return send_from_directory(BASE_DIR, "styles.css")
 
 
 if __name__ == "__main__":

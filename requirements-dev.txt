@@ -1,0 +1,6 @@
+-r requirements.txt
+
+# Testing only — not needed to run the app itself
+pytest
+reportlab   # generates synthetic PDFs for tests, no real statements needed
+pypdf       # builds a password-protected test PDF for error-handling tests
